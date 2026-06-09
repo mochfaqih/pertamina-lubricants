@@ -4,6 +4,13 @@ from ultralytics import YOLO
 from PIL import Image
 import io
 import plotly.express as px
+from datetime import datetime
+
+# Library Tambahan untuk Integrasi Google Cloud
+import gspread
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
 
 # ==============================================================================
 # 1. KONFIGURASI HALAMAN & THEME SLATE GRAY PERFECT GLASSMORPHISM
@@ -85,6 +92,58 @@ st.markdown(f"""
 # Judul atas bersih dan minimalis tanpa logo
 st.markdown('<p class="main-title">PERTAMINA LUBRICANTS — VISIONS</p>', unsafe_allow_html=True)
 st.markdown('<p class="sub-title">Display Image Analyzer & Performance Evaluation</p>', unsafe_allow_html=True)
+
+# ==============================================================================
+# INTERFACES FUNGSI GOOGLE CLOUD STORAGE & SPREADSHEET
+# ==============================================================================
+def get_google_credentials():
+    creds_dict = dict(st.secrets["google_creds"])
+    # Mengamankan string literal newline jika ada masalah escape character
+    creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
+    return Credentials.from_service_account_info(creds_dict, scopes=scopes)
+
+def upload_to_google_drive(image_pil, filename):
+    try:
+        creds = get_google_credentials()
+        drive_service = build('drive', 'v3', credentials=creds)
+        
+        # Konversi gambar PIL ke byte biner memori (tanpa membuat file fisik di server)
+        img_byte_arr = io.BytesIO()
+        image_pil.save(img_byte_arr, format='JPEG')
+        img_byte_arr.seek(0)
+        
+        file_metadata = {
+            'name': filename,
+            'parents': [st.secrets["google_drive"]["folder_id"]]
+        }
+        media = MediaIoBaseUpload(img_byte_arr, mimetype='image/jpeg', resumable=True)
+        file = drive_service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
+        
+        # Atur permission agar gambar otomatis bisa ditinjau via link oleh pemegang berkas tautan
+        try:
+            drive_service.permissions().create(fileId=file.get('id'), body={'type': 'anyone', 'role': 'reader'}).execute()
+        except:
+            pass
+            
+        return file.get('webViewLink')
+    except Exception as e:
+        st.error(f"Gagal upload foto analisis ke Google Drive: {str(e)}")
+        return "Gagal Upload Gambar"
+
+def append_to_google_sheets(row_data):
+    try:
+        creds = get_google_credentials()
+        client = gspread.authorize(creds)
+        sheet = client.open_by_key(st.secrets["google_sheets"]["spreadsheet_id"]).sheet1
+        sheet.append_row(row_data)
+        return True
+    except Exception as e:
+        st.error(f"Gagal menyimpan data ke Google Sheets: {str(e)}")
+        return False
 
 # ==============================================================================
 # 2. LOAD DATA OUTLET LANGSUNG DARI FILE EXCEL (.XLSX) LOKAL
@@ -213,7 +272,7 @@ if uploaded_file is not None:
             image_placeholder.image(st.session_state.predicted_image, caption="Hasil Plotting Analisis Brand & Objek AI", use_container_width=True)
 
     # ==============================================================================
-    # 7. STEP 3: PERFORMANCE EVALUATION (GRAFIK & TABEL SOS)
+    # 7. STEP 3: PERFORMANCE EVALUATION (GRAFIK, TABEL, & SUBMIT CLOUD)
     # ==============================================================================
     if st.session_state.prediction_done and st.session_state.detected_boxes is not None:
         boxes = st.session_state.detected_boxes
@@ -236,6 +295,10 @@ if uploaded_file is not None:
             
             df_counts["Share of Shelf (%)"] = (df_counts["Jumlah (Botol)"] / total_botol) * 100
             df_counts["Share of Shelf (%)"] = df_counts["Share of Shelf (%)"].round(2)
+            
+            # Membuat string ringkasan sebaris untuk kolom deskripsi di Google Sheets
+            summary_list = [f"{row['Brand Oli']}: {row['Jumlah (Botol)']} btl ({row['Share of Shelf (%)']}% )" for _, row in df_counts.iterrows()]
+            rincian_analisis_str = ", ".join(summary_list)
             
             tab_grafik, tab_tabel = st.tabs(["Grafik Share of Shelf (SoS)", "Tabel Data Rincian"])
             
@@ -269,10 +332,39 @@ if uploaded_file is not None:
                 st.dataframe(df_tabel_tampil, use_container_width=True, hide_index=True)
             
             st.markdown("---")
-            if st.button("Submit Final Data Audit", use_container_width=True):
-                st.success(f"Sukses! Hasil verifikasi untuk outlet {selected_outlet_name} telah disimpan ke sistem!")
-                st.session_state.prediction_done = False
-                st.session_state.last_uploaded_file_name = None
+            
+            # TOMBOL OPERASIONAL CLOUD: SUBMIT GANDA (DRIVE & SPREADSHEETS)
+            if st.button("🚀 Submit Final Data Audit ke Cloud", use_container_width=True):
+                with st.spinner("Sedang memproses penyimpanan ganda ke Google Cloud Storage..."):
+                    
+                    # 1. Kirim file citra plotting AI ke Google Drive Folder
+                    waktu_sekarang = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    nama_file_drive = f"AUDIT_{waktu_sekarang}_{selected_outlet_name.replace(' ', '_')}.jpg"
+                    link_foto_drive = upload_to_google_drive(st.session_state.predicted_image, nama_file_drive)
+                    
+                    # 2. Susun baris record data dan kirim ke baris terbawah Google Sheets
+                    waktu_audit_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    baris_data_audit = [
+                        waktu_audit_str,
+                        selected_territory,
+                        selected_outlet_name,
+                        int(outlet_details['Customer ID']),
+                        total_botol,
+                        rincian_analisis_str,
+                        link_foto_drive
+                    ]
+                    
+                    sukses_simpan_sheet = append_to_google_sheets(baris_data_audit)
+                    
+                    if sukses_simpan_sheet and link_foto_drive != "Gagal Upload Gambar":
+                        st.success(f"🔥 Sempurna! Data numerik berhasil tersimpan di Google Sheets dan dokumentasi visual aman di Google Drive!")
+                        st.balloons()
+                        
+                        # Set balik state agar form siap menerima tugas analisis berikutnya
+                        st.session_state.prediction_done = False
+                        st.session_state.last_uploaded_file_name = None
+                    else:
+                        st.error("Sinkronisasi gagal. Periksa kembali jaringan atau otorisasi service account Anda.")
         else:
             st.warning("Analisis Selesai: Tidak ada botol oli yang berhasil diidentifikasi.")
 else:

@@ -1,16 +1,31 @@
+# PENTING: Taruh sys dan os di baris paling atas untuk memotong jalur modul grafis
+import sys
+import os
+# Trik sakti: Paksa sistem mendeteksi versi headless sebelum YOLO dipanggil
+os.environ["OPENCV_VIDEOIO_PRIORITY_BACKEND"] = "0"
+
 import streamlit as st
 import pandas as pd
-from ultralytics import YOLO
 from PIL import Image
 import io
 import plotly.express as px
 from datetime import datetime
+
+# Kunci utamanya di sini: Panggil opencv-python-headless secara manual 
+# SEBELUM ultralytics/YOLO di-import agar server tidak mencari libGL.so.1
+import cv2 
+from ultralytics import YOLO
 
 # Library Tambahan untuk Integrasi Google Cloud
 import gspread
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
+
+# ==============================================================================
+# 1. KONFIGURASI HALAMAN & THEME SLATE GRAY PERFECT GLASSMORPHISM
+# ==============================================================================
+# ... (Sisa kode ke bawah semuanya tetap sama persis, tidak ada yang diubah)
 
 # ==============================================================================
 # 1. KONFIGURASI HALAMAN & THEME SLATE GRAY PERFECT GLASSMORPHISM

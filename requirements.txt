@@ -4,7 +4,7 @@ ultralytics
 pillow
 openpyxl
 plotly
-opencv-python-headless
 gspread
 google-api-python-client
 google-auth
+opencv-python-headless

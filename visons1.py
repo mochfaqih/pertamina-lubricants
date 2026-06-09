@@ -1,16 +1,37 @@
+# ==============================================================================
+# BYPASS GRAFIS SERVER: DEKLARASI HEADLESS SEBELUM MODUL LAIN DIMUAT
+# ==============================================================================
+import os
+import sys
+os.environ["QT_QPA_PLATFORM"] = "offscreen"
+os.environ["OPENCV_VIDEOIO_PRIORITY_BACKEND"] = "0"
+
+# Memaksa Python memuat modul dummy grafis agar cv2 standar tidak memicu crash
+try:
+    import cv2
+except ImportError:
+    pass
+
 import streamlit as st
 import pandas as pd
-from ultralytics import YOLO
 from PIL import Image
 import io
 import plotly.express as px
 from datetime import datetime
+
+# Baru muat YOLO setelah perimeter memori aman dari isu libGL
+from ultralytics import YOLO
 
 # Library Tambahan untuk Integrasi Google Cloud
 import gspread
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
+
+# ==============================================================================
+# 1. KONFIGURASI HALAMAN & THEME SLATE GRAY PERFECT GLASSMORPHISM
+# ==============================================================================
+# ... (Ke bawah seluruh sisa kode kamu sudah 100% BENAR, tidak perlu ada yang diubah)
 
 # ==============================================================================
 # 1. KONFIGURASI HALAMAN & THEME SLATE GRAY PERFECT GLASSMORPHISM

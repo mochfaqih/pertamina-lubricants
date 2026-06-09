@@ -98,8 +98,28 @@ st.markdown('<p class="sub-title">Display Image Analyzer & Performance Evaluatio
 # ==============================================================================
 def get_google_credentials():
     creds_dict = dict(st.secrets["google_creds"])
-    # Mengamankan string literal newline jika ada masalah escape character
-    creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+    
+    # Perbaikan komprehensif untuk menangani kendala pembacaan format kunci rahasia
+    raw_key = creds_dict["private_key"]
+    
+    # 1. Bersihkan tanda kutip ekstra di ujung tulisan jika tidak sengaja terbawa
+    raw_key = raw_key.strip("'\"")
+    
+    # 2. Kembalikan karakter baris baru yang terbaca mentah sebagai string biasa
+    if "\\n" in raw_key:
+        raw_key = raw_key.replace("\\n", "\n")
+    
+    # 3. Antisipasi jika karakter baris baru malah menyatu menjadi spasi akibat sistem internal TOML
+    elif "\n" not in raw_key:
+        raw_key = raw_key.replace("-----BEGIN PRIVATE KEY-----", "-----BEGIN PRIVATE KEY-----\n")
+        raw_key = raw_key.replace("-----END PRIVATE KEY-----", "\n-----END PRIVATE KEY-----")
+        # Memisahkan sisa isi badan kunci utama yang terkompresi tanpa baris baru
+        body = raw_key.replace("-----BEGIN PRIVATE KEY-----\n", "").replace("\n-----END PRIVATE KEY-----", "")
+        body_with_newlines = "\n".join([body[i:i+64] for i in range(0, len(body), 64)])
+        raw_key = f"-----BEGIN PRIVATE KEY-----\n{body_with_newlines}\n-----END PRIVATE KEY-----"
+        
+    creds_dict["private_key"] = raw_key
+    
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive"

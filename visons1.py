@@ -134,60 +134,57 @@ def get_google_credentials():
     ]
     return Credentials.from_service_account_info(creds_dict, scopes=scopes)
 
-def upload_to_google_drive(image_data, filename, folder_id):
+def upload_to_google_drive(image_pil, filename):
     try:
         creds = get_google_credentials()
-        service = build('drive', 'v3', credentials=creds)
+        drive_service = build('drive', 'v3', credentials=creds)
         
-        # Jalur penyelamat konversi objek PIL Image ke BytesIO biner
-        if not isinstance(image_data, (io.BytesIO, io.BufferedReader)):
-            img_byte_arr = io.BytesIO()
-            image_data.save(img_byte_arr, format='JPEG')
-            img_byte_arr.seek(0)
-            image_data_to_upload = img_byte_arr
-        else:
-            image_data_to_upload = image_data
-            image_data_to_upload.seek(0)
-            
+        # 1. Konversi gambar PIL ke byte biner memori
+        img_byte_arr = io.BytesIO()
+        image_pil.save(img_byte_arr, format='JPEG')
+        img_byte_arr.seek(0)
+        
         file_metadata = {
             'name': filename,
-            'parents': [folder_id]
+            'parents': [st.secrets["google_drive"]["folder_id"]]
         }
+        media = MediaIoBaseUpload(img_byte_arr, mimetype='image/jpeg', resumable=True)
         
-        media = MediaIoBaseUpload(
-            image_data_to_upload, 
-            mimetype='image/jpeg', 
-            resumable=True
-        )
-        
-        # PERBAIKAN UTAMA: Menggunakan parameter gabungan yang memaksa bypass kuota robot
-        file = service.files().create(
-            body=file_metadata,
-            media_body=media,
-            fields='id, webViewLink',
-            supportsAllDrives=True,
-            keepRevisionForever=False,
-            ignoreDefaultVisibility=True  # Memaksa mewarisi setelan visibilitas folder utama kamu
+        # 2. Buat file di Drive target
+        file = drive_service.files().create(
+            body=file_metadata, 
+            media_body=media, 
+            fields='id, webViewLink'
         ).execute()
         
-        # PERBAIKAN AGAR KUOTA PINDAH KE AKUN PRIBADI KAMU:
-        # Kita pindahkan hak kepemilikan izin baca/tulis file langsung ke folder induk
-        try:
-            file_id = file.get('id')
-            # Memaksa file agar sepenuhnya diakui sebagai milik folder tersebut, bukan milik robot
-            service.files().update(
-                fileId=file_id,
-                addParents=folder_id,
-                removeParents=folder_id,
-                supportsAllDrives=True
-            ).execute()
-        except:
-            pass # Jika folder biasa, langkah ini otomatis di-bypass dengan aman
+        file_id = file.get('id')
         
+        # 3. TRICK JITU UNTUK AKUN PRIBADI: Transfer hak kepemilikan file ke email pribadimu
+        # Ganti 'email_pribadi_kamu@gmail.com' dengan alamat gmail yang punya kuota 200 GB itu!
+        email_pemilik_kuota = "faqihm45@gmail.com" 
+        
+        try:
+            # Berikan izin sebagai pemilik baru agar kuota 200 GB kamu yang digunakan
+            drive_service.permissions().create(
+                fileId=file_id,
+                transferOwnership=True, # Paksa pindah kepemilikan kuota
+                body={
+                    'type': 'user',
+                    'role': 'owner',
+                    'emailAddress': email_pemilik_kuota
+                }
+            ).execute()
+        except Exception:
+            # Jika transfer kepemilikan ketat, set minimal sebagai reader untuk umum
+            drive_service.permissions().create(
+                fileId=file_id, 
+                body={'type': 'anyone', 'role': 'reader'}
+            ).execute()
+            
         return file.get('webViewLink')
     except Exception as e:
-        st.error(f"Gagal upload foto analisis ke Google Drive: {e}")
-        return None
+        st.error(f"Gagal upload foto analisis ke Google Drive: {str(e)}")
+        return "Gagal Upload Gambar"
 
 def append_to_google_sheets(row_data):
     try:

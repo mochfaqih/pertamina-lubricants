@@ -134,33 +134,34 @@ def get_google_credentials():
     ]
     return Credentials.from_service_account_info(creds_dict, scopes=scopes)
 
-def upload_to_google_drive(image_pil, filename):
+def upload_to_google_drive(image_bytes, filename, folder_id):
     try:
         creds = get_google_credentials()
-        drive_service = build('drive', 'v3', credentials=creds)
-        
-        # Konversi gambar PIL ke byte biner memori (tanpa membuat file fisik di server)
-        img_byte_arr = io.BytesIO()
-        image_pil.save(img_byte_arr, format='JPEG')
-        img_byte_arr.seek(0)
+        service = build('drive', 'v3', credentials=creds)
         
         file_metadata = {
             'name': filename,
-            'parents': [st.secrets["google_drive"]["folder_id"]]
+            'parents': [folder_id]
         }
-        media = MediaIoBaseUpload(img_byte_arr, mimetype='image/jpeg', resumable=True)
-        file = drive_service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
         
-        # Atur permission agar gambar otomatis bisa ditinjau via link oleh pemegang berkas tautan
-        try:
-            drive_service.permissions().create(fileId=file.get('id'), body={'type': 'anyone', 'role': 'reader'}).execute()
-        except:
-            pass
-            
+        media = MediaIoBaseUpload(
+            image_bytes, 
+            mimetype='image/jpeg', 
+            resumable=True
+        )
+        
+        # Ditambahkan parameter supportsAllDrives agar bypass pembatasan kuota robot virtual
+        file = service.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields='id, webViewLink',
+            supportsAllDrives=True  
+        ).execute()
+        
         return file.get('webViewLink')
     except Exception as e:
-        st.error(f"Gagal upload foto analisis ke Google Drive: {str(e)}")
-        return "Gagal Upload Gambar"
+        st.error(f"Gagal upload foto analisis ke Google Drive: {e}")
+        return None
 
 def append_to_google_sheets(row_data):
     try:

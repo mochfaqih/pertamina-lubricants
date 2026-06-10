@@ -134,23 +134,35 @@ def get_google_credentials():
     ]
     return Credentials.from_service_account_info(creds_dict, scopes=scopes)
 
-def upload_to_google_drive(image_bytes, filename, folder_id):
+def upload_to_google_drive(image_data, filename, folder_id):
     try:
         creds = get_google_credentials()
         service = build('drive', 'v3', credentials=creds)
         
+        # JALUR PENYELAMAT: Jika data yang dikirim berupa objek PIL Image, 
+        # kita konversi paksa menjadi aliran biner BytesIO yang sah
+        if not isinstance(image_data, (io.BytesIO, io.BufferedReader)):
+            img_byte_arr = io.BytesIO()
+            # Simpan objek PIL ke dalam biner dengan format JPEG
+            image_data.save(img_byte_arr, format='JPEG')
+            img_byte_arr.seek(0)
+            image_data_to_upload = img_byte_arr
+        else:
+            image_data_to_upload = image_data
+            image_data_to_upload.seek(0)
+            
         file_metadata = {
             'name': filename,
             'parents': [folder_id]
         }
         
+        # Gunakan objek biner yang sudah aman
         media = MediaIoBaseUpload(
-            image_bytes, 
+            image_data_to_upload, 
             mimetype='image/jpeg', 
             resumable=True
         )
         
-        # Ditambahkan parameter supportsAllDrives agar bypass pembatasan kuota robot virtual
         file = service.files().create(
             body=file_metadata,
             media_body=media,

@@ -384,35 +384,41 @@ if uploaded_file is not None:
 
             st.markdown("---")
             
-            # ==================================================================
+# ==================================================================
             # TOMBOL OPERASIONAL CLOUD: SUBMIT METADATA BERURUTAN (A - AI)
             # ==================================================================
             if st.button("Submit Final Data ke Cloud", use_container_width=True):
                 with st.spinner("Sedang memproses pengiriman metadata brand dan penyimpanan ganda foto ke GitHub..."):
                     
-                    # 1. Penyiapan nama file gambar unik berdasarkan waktu
-                    waktu_sekarang = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    # --- TAHAP 1: PENYIAPAN WAKTU & NAMA FILE (KONVERSI KE WIB) ---
+                    from datetime import datetime, timedelta
+                    
+                    # Server cloud biasanya UTC, kita tambah 7 jam untuk mendapatkan WIB
+                    waktu_wib = datetime.utcnow() + timedelta(hours=7)
+                    
+                    # Format untuk nama file gambar (tanpa karakter ilegal seperti titik dua atau spasi)
+                    timestamp_file = waktu_wib.strftime("%Y%m%d_%H%M%S")
                     suffix_name = selected_outlet_name.replace(' ', '_')
                     
-                    nama_file_actual = f"ACTUAL_{waktu_sekarang}_{suffix_name}.jpg"
-                    nama_file_predicted = f"PREDICTED_{waktu_sekarang}_{suffix_name}.jpg"
+                    nama_file_actual = f"ACTUAL_{timestamp_file}_{suffix_name}.jpg"
+                    nama_file_predicted = f"PREDICTED_{timestamp_file}_{suffix_name}.jpg"
+                    
+                    # Format teks rapi untuk kolom A di Google Sheets (Contoh: 2026-06-11 10:45:23 WIB)
+                    waktu_audit_sheets_str = waktu_wib.strftime("%Y-%m-%d %H:%M:%S WIB")
                     
                     # 2. Eksekusi Upload Dua Kali menggunakan def pilihanmu
                     link_actual_pic = upload_to_google_drive(st.session_state.original_image, nama_file_actual)
                     link_predicted_pic = upload_to_google_drive(st.session_state.predicted_image, nama_file_predicted)
                     
                     # 3. Penyusunan Baris Data Berurutan Sesuai Kolom Excel (A - AI)
-                    # Kolom A - G: Informasi Profil Toko
-                    waktu_audit_str = datetime.now().strftime("%Y-%m-%d")
-                    
                     row_data_audit = [
-                        waktu_audit_str,                                      # A: Date
+                        waktu_audit_sheets_str,                               # A: Date (Sekarang lengkap dengan Jam, Menit, Detik WIB)
                         selected_territory,                                   # B: Territory
                         selected_outlet_name,                                 # C: Outlet Name
                         int(outlet_details['Customer ID']),                  # D: Outlet ID
                         float(outlet_details['Longitude']),                   # E: Long
                         float(outlet_details['Latitude']),                    # F: Lat
-                        "Bengkel" if "bengkel" in selected_outlet_name.lower() else "Toko", # G: Outlet Type (Contoh klasifikasi)
+                        "Bengkel" if "bengkel" in selected_outlet_name.lower() else "Toko", # G: Outlet Type
                         
                         total_botol,                                          # H: All Brand (Btl)
                         

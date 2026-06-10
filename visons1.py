@@ -137,24 +137,35 @@ def get_google_credentials():
 # Tambahkan 'folder_id' sebagai argumen ketiga di dalam kurung fungsi ini
 def upload_to_google_drive(image_pil, filename, *args, **kwargs):
     try:
-        # 1. Konversi gambar PIL ke byte biner memori
+        # 1. Konversi gambar PIL ke byte biner memori (.jpg)
         img_byte_arr = io.BytesIO()
         image_pil.save(img_byte_arr, format='JPEG')
         img_byte_arr.seek(0)
         
-        # 2. Kirim ke API Imgur menggunakan Client-ID publik anonim
-        url = "https://api.imgur.com/3/image"
-        payload = {'image': img_byte_arr.getvalue()}
-        headers = {'Authorization': 'Client-ID 1df056635817290'} 
+        # 2. Kirim ke API Catbox.moe
+        url = "https://catbox.moe/user/api.php"
         
-        response = requests.post(url, headers=headers, data=payload)
+        # Menyiapkan payload data untuk instruksi unggah file anonim
+        payload = {
+            'reqtype': 'fileupload',
+            'userhash': '' # Kosongkan saja untuk unggahan instan anonim
+        }
         
-        if response.status_code == 200:
-            data = response.json()
-            return data['data']['link'] # Mengembalikan link langsung (.jpg)
+        # Membungkus data gambar biner agar siap dikirim via HTTP POST
+        files = {
+            'fileToUpload': (filename, img_byte_arr.getvalue(), 'image/jpeg')
+        }
+        
+        response = requests.post(url, data=payload, files=files)
+        
+        # Jika berhasil, Catbox langsung mengembalikan URL teks mentah gambar tersebut
+        if response.status_code == 200 and response.text.startswith("https://"):
+            direct_link = response.text.strip()
+            return direct_link
         else:
-            st.error(f"Imgur Upload Error: Status {response.status_code}")
+            st.error(f"Catbox Upload Error: {response.text}")
             return "Gagal Upload Gambar"
+            
     except Exception as e:
         st.error(f"Gagal memproses pengiriman gambar: {str(e)}")
         return "Gagal Upload Gambar"
@@ -367,10 +378,7 @@ if uploaded_file is not None:
                     nama_file_drive = f"AUDIT_{waktu_sekarang}_{selected_outlet_name.replace(' ', '_')}.jpg"
                     # KODE BARU YANG BENAR (Tambahkan st.secrets["google_drive"]["folder_id"])
                     # UBAH BAGIAN INI DI SEKITAR BARIS 396
-                    link_foto_drive = upload_to_google_drive(
-                        st.session_state.predicted_image,
-                        nama_file_drive
-                        )
+                    link_foto_drive = upload_to_google_drive(st.session_state.predicted_image, nama_file_drive)
                     
                     # 2. Susun baris record data dan kirim ke baris terbawah Google Sheets
                     waktu_audit_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

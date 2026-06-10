@@ -12,6 +12,7 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 import requests
+import base64
 # ==============================================================================
 # 1. KONFIGURASI HALAMAN & THEME SLATE GRAY PERFECT GLASSMORPHISM
 # ==============================================================================
@@ -141,34 +142,44 @@ def upload_to_google_drive(image_pil, filename, *args, **kwargs):
         img_byte_arr = io.BytesIO()
         image_pil.save(img_byte_arr, format='JPEG')
         img_byte_arr.seek(0)
+        image_bytes = img_byte_arr.getvalue()
         
-        # 2. Kirim ke API Catbox.moe
-        url = "https://catbox.moe/user/api.php"
+        # 2. Ambil kredensial GitHub dari Streamlit Secrets
+        github_token = st.secrets["github"]["token"]
+        repo_owner = "Mfaqih8"  # Username GitHub kamu
+        repo_name = "pertamina-lubricants"  # Nama repositori kamu
+        path_di_repo = f"saved_images/{filename}"  # Folder tujuan di GitHub
         
-        # Menyiapkan payload data untuk instruksi unggah file anonim
+        # 3. Siapkan URL API GitHub dan Konversi gambar ke Base64 (Syarat GitHub API)
+        url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/contents/{path_di_repo}"
+        base64_content = base64.b64encode(image_bytes).decode('utf-8')
+        
         payload = {
-            'reqtype': 'fileupload',
-            'userhash': '' # Kosongkan saja untuk unggahan instan anonim
+            "message": f"Upload foto analisis: {filename} via Streamlit App",
+            "content": base64_content,
+            "branch": "main" # Pastikan nama branch utama kamu adalah main
         }
         
-        # Membungkus data gambar biner agar siap dikirim via HTTP POST
-        files = {
-            'fileToUpload': (filename, img_byte_arr.getvalue(), 'image/jpeg')
+        headers = {
+            "Authorization": f"token {github_token}",
+            "Accept": "application/vnd.github.v3+json"
         }
         
-        response = requests.post(url, data=payload, files=files)
+        # 4. Eksekusi pengiriman (Auto-Commit & Push) langsung ke Repositori
+        response = requests.put(url, json=payload, headers=headers)
         
-        # Jika berhasil, Catbox langsung mengembalikan URL teks mentah gambar tersebut
-        if response.status_code == 200 and response.text.startswith("https://"):
-            direct_link = response.text.strip()
-            return direct_link
+        if response.status_code in [200, 201]:
+            # Jika sukses, GitHub akan membalas dengan info file, kita ambil download_url publiknya
+            data = response.json()
+            raw_url = data['content']['download_url']
+            return raw_url
         else:
-            st.error(f"Catbox Upload Error: {response.text}")
-            return "Gagal Upload Gambar"
+            st.error(f"GitHub API Error: {response.status_code} - {response.text}")
+            return "Gagal Upload ke GitHub"
             
     except Exception as e:
-        st.error(f"Gagal memproses pengiriman gambar: {str(e)}")
-        return "Gagal Upload Gambar"
+        st.error(f"Gagal memproses penyimpanan GitHub: {str(e)}")
+        return "Gagal Upload ke GitHub"
     
 def append_to_google_sheets(row_data):
     try:

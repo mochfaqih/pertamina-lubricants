@@ -135,47 +135,30 @@ def get_google_credentials():
     return Credentials.from_service_account_info(creds_dict, scopes=scopes)
 
 # Tambahkan 'folder_id' sebagai argumen ketiga di dalam kurung fungsi ini
-def upload_to_google_drive(image_pil, filename, folder_id):
+def upload_to_google_drive(image_pil, filename, *args, **kwargs):
     try:
-        creds = get_google_credentials()
-        drive_service = build('drive', 'v3', credentials=creds)
-        
-        # Konversi gambar PIL ke biner memori
+        # 1. Konversi gambar PIL ke byte biner memori
         img_byte_arr = io.BytesIO()
         image_pil.save(img_byte_arr, format='JPEG')
         img_byte_arr.seek(0)
         
-        file_metadata = {
-            'name': filename,
-            'parents': [folder_id]
-        }
-        media = MediaIoBaseUpload(img_byte_arr, mimetype='image/jpeg', resumable=True)
+        # 2. Kirim ke API Imgur menggunakan Client-ID publik anonim
+        url = "https://api.imgur.com/3/image"
+        payload = {'image': img_byte_arr.getvalue()}
+        headers = {'Authorization': 'Client-ID 1df056635817290'} 
         
-        # Buat file di Google Drive tujuan
-        file = drive_service.files().create(
-            body=file_metadata, 
-            media_body=media, 
-            fields='id, webViewLink',
-            supportsAllDrives=True
-        ).execute()
+        response = requests.post(url, headers=headers, data=payload)
         
-        file_id = file.get('id')
-        
-        # Berikan izin akses link agar siapapun yang memegang tautan di Sheets bisa melihat fotonya
-        try:
-            drive_service.permissions().create(
-                fileId=file_id, 
-                body={'type': 'anyone', 'role': 'reader'},
-                supportsAllDrives=True
-            ).execute()
-        except:
-            pass
-            
-        return file.get('webViewLink')
+        if response.status_code == 200:
+            data = response.json()
+            return data['data']['link'] # Mengembalikan link langsung (.jpg)
+        else:
+            st.error(f"Imgur Upload Error: Status {response.status_code}")
+            return "Gagal Upload Gambar"
     except Exception as e:
-        st.error(f"Gagal upload foto analisis ke Google Drive: {str(e)}")
+        st.error(f"Gagal memproses pengiriman gambar: {str(e)}")
         return "Gagal Upload Gambar"
-
+    
 def append_to_google_sheets(row_data):
     try:
         creds = get_google_credentials()
@@ -383,10 +366,10 @@ if uploaded_file is not None:
                     waktu_sekarang = datetime.now().strftime("%Y%m%d_%H%M%S")
                     nama_file_drive = f"AUDIT_{waktu_sekarang}_{selected_outlet_name.replace(' ', '_')}.jpg"
                     # KODE BARU YANG BENAR (Tambahkan st.secrets["google_drive"]["folder_id"])
+                    # UBAH BAGIAN INI DI SEKITAR BARIS 396
                     link_foto_drive = upload_to_google_drive(
-                        st.session_state.predicted_image, 
-                        nama_file_drive, 
-                        st.secrets["google_drive"]["folder_id"]
+                        st.session_state.predicted_image,
+                        nama_file_drive
                         )
                     
                     # 2. Susun baris record data dan kirim ke baris terbawah Google Sheets

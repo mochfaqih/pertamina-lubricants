@@ -21,7 +21,7 @@ import base64
 # 1. KONFIGURASI HALAMAN & THEME SLATE GRAY PERFECT GLASSMORPHISM
 # ==============================================================================
 st.set_page_config(
-    page_title="Pertamina Lubricants - AI Promo Audit",
+    page_title="VISONS - Visibility of Outlet Prediction System",
     layout="wide"
 )
 
@@ -96,7 +96,7 @@ st.markdown(f"""
 
 # Judul atas bersih dan minimalis tanpa logo
 st.markdown('<p class="main-title">PERTAMINA LUBRICANTS — VISIONS</p>', unsafe_allow_html=True)
-st.markdown('<p class="sub-title">Display Image Analyzer & Performance Evaluation</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-title">Visibility of Outlet Prediction System</p>', unsafe_allow_html=True)
 
 # ==============================================================================
 # INTERFACES FUNGSI GOOGLE CLOUD STORAGE & SPREADSHEET
@@ -146,18 +146,18 @@ def upload_to_google_drive(image_pil, filename, *args, **kwargs):
         
         # 2. Ambil kredensial GitHub dari Streamlit Secrets
         github_token = st.secrets["github"]["token"]
-        repo_owner = "mochfaqih"  # Username GitHub kamu
-        repo_name = "pertamina-lubricants"  # Nama repositori kamu
+        repo_owner = "mochfaqih"  # Menyesuaikan kodinganmu
+        repo_name = "pertamina-lubricants"  
         path_di_repo = f"saved_images/{filename}"  # Folder tujuan di GitHub
         
-        # 3. Siapkan URL API GitHub dan Konversi gambar ke Base64 (Syarat GitHub API)
+        # 3. Siapkan URL API GitHub dan Konversi gambar ke Base64
         url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/contents/{path_di_repo}"
         base64_content = base64.b64encode(image_bytes).decode('utf-8')
         
         payload = {
             "message": f"Upload foto analisis: {filename} via Streamlit App",
             "content": base64_content,
-            "branch": "main" # Pastikan nama branch utama kamu adalah main
+            "branch": "main" 
         }
         
         headers = {
@@ -169,17 +169,16 @@ def upload_to_google_drive(image_pil, filename, *args, **kwargs):
         response = requests.put(url, json=payload, headers=headers)
         
         if response.status_code in [200, 201]:
-            # Jika sukses, GitHub akan membalas dengan info file, kita ambil download_url publiknya
             data = response.json()
             raw_url = data['content']['download_url']
             return raw_url
         else:
             st.error(f"GitHub API Error: {response.status_code} - {response.text}")
-            return "Gagal Upload ke GitHub"
+            return "Gagal Upload Gambar"
             
     except Exception as e:
         st.error(f"Gagal memproses penyimpanan GitHub: {str(e)}")
-        return "Gagal Upload ke GitHub"
+        return "Gagal Upload Gambar"
     
 def append_to_google_sheets(row_data):
     try:
@@ -236,7 +235,7 @@ if "last_uploaded_file_name" not in st.session_state:
 # ==============================================================================
 # 5. STEP 1: IDENTIFIKASI OUTLET
 # ==============================================================================
-st.markdown("### ⚙️ Step 1: Identifikasi & Verifikasi Outlet")
+st.markdown("### Step 1: Informasi & Verifikasi Outlet")
 col_select, col_map = st.columns([1, 1.2])
 
 with col_select:
@@ -247,7 +246,7 @@ with col_select:
     
     list_outlet = sorted(df_filtered["Customer Name"].dropna().unique())
     selected_outlet_name = st.selectbox(
-        "Pilih Nama Outlet / Toko", 
+        "Pilih Nama Bengkel / Toko", 
         list_outlet,
         index=0,
         placeholder="Ketik nama bengkel..."
@@ -273,7 +272,7 @@ with col_map:
 # 6. STEP 2: DISPLAY IMAGE ANALYZER
 # ==============================================================================
 st.markdown("---")
-st.markdown("### 📸 Step 2: Display Image Analyzer")
+st.markdown("### Step 2: Display Image Analyzer")
 
 uploaded_file = st.file_uploader(
     "Ambil Foto Rak Display (Gunakan Kamera HP atau Upload dari Galeri)", 
@@ -288,16 +287,17 @@ if uploaded_file is not None:
         st.session_state.last_uploaded_file_name = uploaded_file.name
 
     image = Image.open(uploaded_file)
+    st.session_state.original_image = image
     image_placeholder = st.empty()
     
     if not st.session_state.prediction_done:
         image_placeholder.image(image, caption="Foto Berhasil Ditangkap - Siap Dianalisis", use_container_width=True)
     else:
-        image_placeholder.image(st.session_state.predicted_image, caption="Hasil Plotting Analisis Brand & Objek AI", use_container_width=True)
+        image_placeholder.image(st.session_state.predicted_image, caption="Hasil Plotting Analisis Brand & Objek", use_container_width=True)
 
     col_btn1, col_btn2 = st.columns([4, 1])
     with col_btn1:
-        execute_predict = st.button("Jalankan Analisis AI Promo", type="primary", use_container_width=True)
+        execute_predict = st.button("Mulai Prediksi", type="primary", use_container_width=True)
     with col_btn2:
         reset_click = st.button("Reset Gambar", use_container_width=True)
         if reset_click:
@@ -308,7 +308,7 @@ if uploaded_file is not None:
             st.rerun()
 
     if execute_predict:
-        with st.spinner("Model YOLOv8 sedang memproses struktur rak display..."):
+        with st.spinner("Model VISONS sedang memproses struktur rak display..."):
             results = model.predict(image, conf=0.25)
             
             res_plotted = results[0].plot()
@@ -326,96 +326,128 @@ if uploaded_file is not None:
         total_botol = len(boxes)
         
         st.markdown("---")
-        st.markdown("### 📊 Step 3: Performance Evaluation")
+        st.markdown("### Step 3: Performance Evaluation")
         st.markdown(f"**Total Keseluruhan Botol Terdeteksi:** `{total_botol}` botol")
         
         if total_botol > 0:
             class_names = model.names
-            counts = {}
+            
+            # Inisialisasi hitungan awal untuk semua list brand sesuai kolom Excel
+            target_brands = [
+                "PERTAMINA", "SHELL", "AHM", "MOTUL", "CASTROL", 
+                "FEDERAL", "TOP 1", "DELTALUBE", "YAMALUBE", "BM 1", "REPSOL"
+            ]
+            
+            counts = {b: 0 for b in target_brands}
+            counts["OTHERS"] = 0
+            
+            # Penampung untuk menghitung average confidence score
+            conf_scores = []
+            
             for box in boxes:
                 cls_id = int(box.cls[0])
-                name = class_names[cls_id]
-                counts[name] = counts.get(name, 0) + 1
-            
-            df_counts = pd.DataFrame(list(counts.items()), columns=["Brand Oli", "Jumlah (Botol)"])
-            df_counts["Brand Oli"] = df_counts["Brand Oli"].str.upper()
-            
-            df_counts["Share of Shelf (%)"] = (df_counts["Jumlah (Botol)"] / total_botol) * 100
-            df_counts["Share of Shelf (%)"] = df_counts["Share of Shelf (%)"].round(2)
-            
-            # Membuat string ringkasan sebaris untuk kolom deskripsi di Google Sheets
-            summary_list = [f"{row['Brand Oli']}: {row['Jumlah (Botol)']} btl ({row['Share of Shelf (%)']}% )" for _, row in df_counts.iterrows()]
-            rincian_analisis_str = ", ".join(summary_list)
-            
-            tab_grafik, tab_tabel = st.tabs(["Grafik Share of Shelf (SoS)", "Tabel Data Rincian"])
-            
-            with tab_grafik:
-                fig = px.bar(
-                    df_counts, 
-                    x="Brand Oli", 
-                    y="Share of Shelf (%)",
-                    color="Brand Oli",
-                    text=df_counts["Share of Shelf (%)"].apply(lambda x: f"{x}%"),
-                    title=f"Analisis Share of Shelf (SoS) - {selected_outlet_name}",
-                    color_discrete_sequence=px.colors.qualitative.Pastel,
-                    labels={"Share of Shelf (%)": "Persentase SoS (%)"}
-                )
-                fig.update_traces(textposition='outside', textfont_color='white')
-                fig.update_layout(
-                    showlegend=False, 
-                    height=400, 
-                    yaxis_range=[0, 110],
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    font_color="white"
-                )
-                fig.update_xaxes(showgrid=False)
-                fig.update_yaxes(showgrid=True, gridcolor="rgba(255,255,255,0.05)")
-                st.plotly_chart(fig, use_container_width=True)
+                name = class_names[cls_id].upper().strip()
                 
-            with tab_tabel:
-                df_tabel_tampil = df_counts.copy()
-                df_tabel_tampil["Share of Shelf (%)"] = df_tabel_tampil["Share of Shelf (%)"].apply(lambda x: f"{x}%")
-                st.dataframe(df_tabel_tampil, use_container_width=True, hide_index=True)
+                # Ambil nilai confidence score dari deteksi YOLO (0.0 - 1.0)
+                conf_val = float(box.conf[0])
+                conf_scores.append(conf_val)
+                
+                if name in counts:
+                    counts[name] += 1
+                else:
+                    counts["OTHERS"] += 1
             
+            # --- Perhitungan Average Confidence Level ---
+            if len(conf_scores) > 0:
+                avg_conf = (sum(conf_scores) / len(conf_scores)) * 100
+                avg_confidence_str = f"{avg_conf:.2f}%"
+            else:
+                avg_confidence_str = "0.00%"
+                
+            # Tarik data frame untuk visualisasi chart bawaan kodemu
+            df_counts = pd.DataFrame([{"Brand Oli": k, "Jumlah (Botol)": v} for k, v in counts.items() if v > 0])
+            if not df_counts.empty:
+                df_counts["Share of Shelf (%)"] = ((df_counts["Jumlah (Botol)"] / total_botol) * 100).round(2)
+            
+            # [Bagian kode Render Grafik tab_grafik & tab_tabel bawaan kodemu tetap berjalan normal di sini]
+            tab_grafik, tab_tabel = st.tabs(["Grafik Share of Shelf (SoS)", "Tabel Data Rincian"])
+            with tab_grafik:
+                if not df_counts.empty:
+                    fig = px.bar(df_counts, x="Brand Oli", y="Share of Shelf (%)", color="Brand Oli",
+                                 text=df_counts["Share of Shelf (%)"].apply(lambda x: f"{x}%"),
+                                 title=f"Analisis Share of Shelf (SoS) - {selected_outlet_name}")
+                    fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color="white", showlegend=False)
+                    st.plotly_chart(fig, use_container_width=True)
+            with tab_tabel:
+                if not df_counts.empty:
+                    st.dataframe(df_counts, use_container_width=True, hide_index=True)
+
             st.markdown("---")
             
-            # TOMBOL OPERASIONAL CLOUD: SUBMIT GANDA (DRIVE & SPREADSHEETS)
-            if st.button("🚀 Submit Final Data Audit ke Cloud", use_container_width=True):
-                with st.spinner("Sedang memproses penyimpanan ganda ke Google Cloud Storage..."):
+            # ==================================================================
+            # TOMBOL OPERASIONAL CLOUD: SUBMIT METADATA BERURUTAN (A - AI)
+            # ==================================================================
+            if st.button("Submit Final Data ke Cloud", use_container_width=True):
+                with st.spinner("Sedang memproses pengiriman metadata brand dan penyimpanan ganda foto ke GitHub..."):
                     
-                    # 1. Kirim file citra plotting AI ke Google Drive Folder
+                    # 1. Penyiapan nama file gambar unik berdasarkan waktu
                     waktu_sekarang = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    nama_file_drive = f"AUDIT_{waktu_sekarang}_{selected_outlet_name.replace(' ', '_')}.jpg"
-                    # KODE BARU YANG BENAR (Tambahkan st.secrets["google_drive"]["folder_id"])
-                    # UBAH BAGIAN INI DI SEKITAR BARIS 396
-                    link_foto_drive = upload_to_google_drive(st.session_state.predicted_image, nama_file_drive)
+                    suffix_name = selected_outlet_name.replace(' ', '_')
                     
-                    # 2. Susun baris record data dan kirim ke baris terbawah Google Sheets
-                    waktu_audit_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    baris_data_audit = [
-                        waktu_audit_str,
-                        selected_territory,
-                        selected_outlet_name,
-                        int(outlet_details['Customer ID']),
-                        total_botol,
-                        rincian_analisis_str,
-                        link_foto_drive
+                    nama_file_actual = f"ACTUAL_{waktu_sekarang}_{suffix_name}.jpg"
+                    nama_file_predicted = f"PREDICTED_{waktu_sekarang}_{suffix_name}.jpg"
+                    
+                    # 2. Eksekusi Upload Dua Kali menggunakan def pilihanmu
+                    link_actual_pic = upload_to_google_drive(st.session_state.original_image, nama_file_actual)
+                    link_predicted_pic = upload_to_google_drive(st.session_state.predicted_image, nama_file_predicted)
+                    
+                    # 3. Penyusunan Baris Data Berurutan Sesuai Kolom Excel (A - AI)
+                    # Kolom A - G: Informasi Profil Toko
+                    waktu_audit_str = datetime.now().strftime("%Y-%m-%d")
+                    
+                    row_data_audit = [
+                        waktu_audit_str,                                      # A: Date
+                        selected_territory,                                   # B: Territory
+                        selected_outlet_name,                                 # C: Outlet Name
+                        int(outlet_details['Customer ID']),                  # D: Outlet ID
+                        float(outlet_details['Longitude']),                   # E: Long
+                        float(outlet_details['Latitude']),                    # F: Lat
+                        "Bengkel" if "bengkel" in selected_outlet_name.lower() else "Toko", # G: Outlet Type (Contoh klasifikasi)
+                        
+                        total_botol,                                          # H: All Brand (Btl)
+                        
+                        # Pasangan berurutan: Jumlah Botol & % SoS untuk masing-masing Brand
+                        counts["PERTAMINA"], f"{(counts['PERTAMINA']/total_botol)*100:.2f}%" if total_botol > 0 else "0.00%", # I-J
+                        counts["SHELL"], f"{(counts['SHELL']/total_botol)*100:.2f}%" if total_botol > 0 else "0.00%",         # K-L
+                        counts["AHM"], f"{(counts['AHM']/total_botol)*100:.2f}%" if total_botol > 0 else "0.00%",             # M-N
+                        counts["MOTUL"], f"{(counts['MOTUL']/total_botol)*100:.2f}%" if total_botol > 0 else "0.00%",         # O-P
+                        counts["CASTROL"], f"{(counts['CASTROL']/total_botol)*100:.2f}%" if total_botol > 0 else "0.00%",     # Q-R
+                        counts["FEDERAL"], f"{(counts['FEDERAL']/total_botol)*100:.2f}%" if total_botol > 0 else "0.00%",     # S-T
+                        counts["TOP 1"], f"{(counts['TOP 1']/total_botol)*100:.2f}%" if total_botol > 0 else "0.00%",         # U-V
+                        counts["DELTALUBE"], f"{(counts['DELTALUBE']/total_botol)*100:.2f}%" if total_botol > 0 else "0.00%", # W-X
+                        counts["YAMALUBE"], f"{(counts['YAMALUBE']/total_botol)*100:.2f}%" if total_botol > 0 else "0.00%",   # Y-Z
+                        counts["BM 1"], f"{(counts['BM 1']/total_botol)*100:.2f}%" if total_botol > 0 else "0.00%",           # AA-AB
+                        counts["REPSOL"], f"{(counts['REPSOL']/total_botol)*100:.2f}%" if total_botol > 0 else "0.00%",       # AC-AD
+                        counts["OTHERS"], f"{(counts['OTHERS']/total_botol)*100:.2f}%" if total_botol > 0 else "0.00%",       # AE-AF
+                        
+                        avg_confidence_str,                                   # AG: Avg Confidence Pred (%)
+                        link_actual_pic,                                      # AH: Link Original Pic
+                        link_predicted_pic                                    # AI: Link Predicted Pic
                     ]
                     
-                    sukses_simpan_sheet = append_to_google_sheets(baris_data_audit)
+                    # 4. Tembak baris data rapi ke Google Sheets lewat def yang sudah kamu punya
+                    sukses_simpan_sheet = append_to_google_sheets(row_data_audit)
                     
-                    if sukses_simpan_sheet and link_foto_drive != "Gagal Upload Gambar":
-                        st.success(f"🔥 Sempurna! Data numerik berhasil tersimpan di Google Sheets dan dokumentasi visual aman di Google Drive!")
+                    if sukses_simpan_sheet and "Gagal" not in link_actual_pic and "Gagal" not in link_predicted_pic:
+                        st.success("Sempurna! Ekstraksi data berurutan per-brand dan penyimpanan ganda foto berhasil!")
                         st.balloons()
                         
-                        # Set balik state agar form siap menerima tugas analisis berikutnya
                         st.session_state.prediction_done = False
                         st.session_state.last_uploaded_file_name = None
                     else:
-                        st.error("Sinkronisasi gagal. Periksa kembali jaringan atau otorisasi service account Anda.")
+                        st.error("Sinkronisasi gagal. Pastikan pengaturan token rahasia GitHub & Google Sheets milikmu valid.")
         else:
-            st.warning("Analisis Selesai: Tidak ada botol oli yang berhasil diidentifikasi.")
+            st.warning("Analisis Selesai: Tidak ada objek botol oli yang berhasil diidentifikasi oleh model.")
 else:
     st.session_state.prediction_done = False
     st.session_state.predicted_image = None
@@ -435,4 +467,4 @@ with col_f2:
     except:
         pass
 
-st.markdown('<p class="footer-text">Copyright | 39010378 | 2026</p>', unsafe_allow_html=True)
+st.markdown('<p class="footer-text">Credit | 39010378 | 2026</p>', unsafe_allow_html=True)

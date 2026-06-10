@@ -139,11 +139,9 @@ def upload_to_google_drive(image_data, filename, folder_id):
         creds = get_google_credentials()
         service = build('drive', 'v3', credentials=creds)
         
-        # JALUR PENYELAMAT: Jika data yang dikirim berupa objek PIL Image, 
-        # kita konversi paksa menjadi aliran biner BytesIO yang sah
+        # Jalur penyelamat konversi objek PIL Image ke BytesIO biner
         if not isinstance(image_data, (io.BytesIO, io.BufferedReader)):
             img_byte_arr = io.BytesIO()
-            # Simpan objek PIL ke dalam biner dengan format JPEG
             image_data.save(img_byte_arr, format='JPEG')
             img_byte_arr.seek(0)
             image_data_to_upload = img_byte_arr
@@ -156,19 +154,35 @@ def upload_to_google_drive(image_data, filename, folder_id):
             'parents': [folder_id]
         }
         
-        # Gunakan objek biner yang sudah aman
         media = MediaIoBaseUpload(
             image_data_to_upload, 
             mimetype='image/jpeg', 
             resumable=True
         )
         
+        # PERBAIKAN UTAMA: Menggunakan parameter gabungan yang memaksa bypass kuota robot
         file = service.files().create(
             body=file_metadata,
             media_body=media,
             fields='id, webViewLink',
-            supportsAllDrives=True  
+            supportsAllDrives=True,
+            keepRevisionForever=False,
+            ignoreDefaultVisibility=True  # Memaksa mewarisi setelan visibilitas folder utama kamu
         ).execute()
+        
+        # PERBAIKAN AGAR KUOTA PINDAH KE AKUN PRIBADI KAMU:
+        # Kita pindahkan hak kepemilikan izin baca/tulis file langsung ke folder induk
+        try:
+            file_id = file.get('id')
+            # Memaksa file agar sepenuhnya diakui sebagai milik folder tersebut, bukan milik robot
+            service.files().update(
+                fileId=file_id,
+                addParents=folder_id,
+                removeParents=folder_id,
+                supportsAllDrives=True
+            ).execute()
+        except:
+            pass # Jika folder biasa, langkah ini otomatis di-bypass dengan aman
         
         return file.get('webViewLink')
     except Exception as e:

@@ -134,7 +134,8 @@ def get_google_credentials():
     ]
     return Credentials.from_service_account_info(creds_dict, scopes=scopes)
 
-def upload_to_google_drive(image_pil, filename):
+# Tambahkan 'folder_id' sebagai argumen ketiga di dalam kurung fungsi ini
+def upload_to_google_drive(image_pil, filename, folder_id):
     try:
         creds = get_google_credentials()
         drive_service = build('drive', 'v3', credentials=creds)
@@ -146,7 +147,7 @@ def upload_to_google_drive(image_pil, filename):
         
         file_metadata = {
             'name': filename,
-            'parents': [st.secrets["google_drive"]["folder_id"]]
+            'parents': [folder_id] # Menggunakan folder_id yang dikirim dari bawah
         }
         media = MediaIoBaseUpload(img_byte_arr, mimetype='image/jpeg', resumable=True)
         
@@ -160,14 +161,13 @@ def upload_to_google_drive(image_pil, filename):
         file_id = file.get('id')
         
         # 3. TRICK JITU UNTUK AKUN PRIBADI: Transfer hak kepemilikan file ke email pribadimu
-        # Ganti 'email_pribadi_kamu@gmail.com' dengan alamat gmail yang punya kuota 200 GB itu!
+        # Ganti dengan alamat gmail pribadi milikmu yang berkuota 200 GB itu
         email_pemilik_kuota = "faqihm45@gmail.com" 
         
         try:
-            # Berikan izin sebagai pemilik baru agar kuota 200 GB kamu yang digunakan
             drive_service.permissions().create(
                 fileId=file_id,
-                transferOwnership=True, # Paksa pindah kepemilikan kuota
+                transferOwnership=True, 
                 body={
                     'type': 'user',
                     'role': 'owner',
@@ -175,7 +175,6 @@ def upload_to_google_drive(image_pil, filename):
                 }
             ).execute()
         except Exception:
-            # Jika transfer kepemilikan ketat, set minimal sebagai reader untuk umum
             drive_service.permissions().create(
                 fileId=file_id, 
                 body={'type': 'anyone', 'role': 'reader'}

@@ -5,7 +5,7 @@ from PIL import Image
 import io
 import plotly.express as px
 from datetime import datetime
-
+import os
 # Library Tambahan untuk Integrasi Google Cloud
 import gspread
 from google.oauth2.service_account import Credentials
@@ -135,55 +135,30 @@ def get_google_credentials():
     return Credentials.from_service_account_info(creds_dict, scopes=scopes)
 
 # Tambahkan 'folder_id' sebagai argumen ketiga di dalam kurung fungsi ini
-def upload_to_google_drive(image_pil, filename, folder_id):
+def upload_to_google_drive(image_pil, filename, folder_id=None):
     try:
-        creds = get_google_credentials()
-        drive_service = build('drive', 'v3', credentials=creds)
-        
-        # 1. Konversi gambar PIL ke byte biner memori
-        img_byte_arr = io.BytesIO()
-        image_pil.save(img_byte_arr, format='JPEG')
-        img_byte_arr.seek(0)
-        
-        file_metadata = {
-            'name': filename,
-            'parents': [folder_id] # Menggunakan folder_id yang dikirim dari bawah
-        }
-        media = MediaIoBaseUpload(img_byte_arr, mimetype='image/jpeg', resumable=True)
-        
-        # 2. Buat file di Drive target
-        file = drive_service.files().create(
-            body=file_metadata, 
-            media_body=media, 
-            fields='id, webViewLink'
-        ).execute()
-        
-        file_id = file.get('id')
-        
-        # 3. TRICK JITU UNTUK AKUN PRIBADI: Transfer hak kepemilikan file ke email pribadimu
-        # Ganti dengan alamat gmail pribadi milikmu yang berkuota 200 GB itu
-        email_pemilik_kuota = "faqihm45@gmail.com" 
-        
-        try:
-            drive_service.permissions().create(
-                fileId=file_id,
-                transferOwnership=True, 
-                body={
-                    'type': 'user',
-                    'role': 'owner',
-                    'emailAddress': email_pemilik_kuota
-                }
-            ).execute()
-        except Exception:
-            drive_service.permissions().create(
-                fileId=file_id, 
-                body={'type': 'anyone', 'role': 'reader'}
-            ).execute()
+        # 1. Buat folder lokal di server Streamlit jika belum ada
+        save_dir = "saved_images"
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
             
-        return file.get('webViewLink')
+        # 2. Tentukan lokasi path file gambar
+        file_path = os.path.join(save_dir, filename)
+        
+        # 3. Simpan gambar hasil prediksi YOLO ke folder tersebut
+        image_pil.save(file_path, format='JPEG')
+        
+        # 4. Ambil nama repositori Anda dari environment Streamlit secara otomatis
+        # Menghasilkan link publik GitHub agar bisa diklik dari Google Sheets
+        repo_owner = "mochfaqih" # <--- Ganti dengan username GitHub Anda jika berbeda
+        repo_name = "pertamina-lubricants" # <--- Ganti dengan nama repo Anda
+        
+        github_link = f"https://raw.githubusercontent.com/{repo_owner}/{repo_name}/main/{file_path}"
+        
+        return github_link
     except Exception as e:
-        st.error(f"Gagal upload foto analisis ke Google Drive: {str(e)}")
-        return "Gagal Upload Gambar"
+        st.error(f"Gagal menyimpan foto analisis: {str(e)}")
+        return "Gagal Simpan Gambar"
 
 def append_to_google_sheets(row_data):
     try:

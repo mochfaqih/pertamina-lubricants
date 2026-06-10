@@ -369,7 +369,12 @@ if uploaded_file is not None:
                     # 1. Kirim file citra plotting AI ke Google Drive Folder
                     waktu_sekarang = datetime.now().strftime("%Y%m%d_%H%M%S")
                     nama_file_drive = f"AUDIT_{waktu_sekarang}_{selected_outlet_name.replace(' ', '_')}.jpg"
-                    link_foto_drive = upload_to_google_drive(st.session_state.predicted_image, nama_file_drive)
+                    # KODE BARU YANG BENAR (Tambahkan st.secrets["google_drive"]["folder_id"])
+                    link_foto_drive = upload_to_google_drive(
+                        st.session_state.predicted_image, 
+                        nama_file_drive, 
+                        st.secrets["google_drive"]["folder_id"]
+                        )
                     
                     # 2. Susun baris record data dan kirim ke baris terbawah Google Sheets
                     waktu_audit_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

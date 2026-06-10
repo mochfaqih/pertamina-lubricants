@@ -11,7 +11,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
-
+import requests
 # ==============================================================================
 # 1. KONFIGURASI HALAMAN & THEME SLATE GRAY PERFECT GLASSMORPHISM
 # ==============================================================================
@@ -137,28 +137,29 @@ def get_google_credentials():
 # Tambahkan 'folder_id' sebagai argumen ketiga di dalam kurung fungsi ini
 def upload_to_google_drive(image_pil, filename, folder_id=None):
     try:
-        # 1. Buat folder lokal di server Streamlit jika belum ada
-        save_dir = "saved_images"
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
-            
-        # 2. Tentukan lokasi path file gambar
-        file_path = os.path.join(save_dir, filename)
+        # 1. Konversi gambar PIL ke byte biner memori
+        img_byte_arr = io.BytesIO()
+        image_pil.save(img_byte_arr, format='JPEG')
+        img_byte_arr.seek(0)
         
-        # 3. Simpan gambar hasil prediksi YOLO ke folder tersebut
-        image_pil.save(file_path, format='JPEG')
+        # 2. Kirim ke API Imgur menggunakan Client-ID publik anonim
+        url = "https://api.imgur.com/3/image"
+        payload = {'image': img_byte_arr.getvalue()}
+        headers = {'Authorization': 'Client-ID 1df056635817290'} # Client-ID cadangan universal
         
-        # 4. Ambil nama repositori Anda dari environment Streamlit secara otomatis
-        # Menghasilkan link publik GitHub agar bisa diklik dari Google Sheets
-        repo_owner = "mochfaqih" # <--- Ganti dengan username GitHub Anda jika berbeda
-        repo_name = "pertamina-lubricants" # <--- Ganti dengan nama repo Anda
+        response = requests.post(url, headers=headers, data=payload)
         
-        github_link = f"https://raw.githubusercontent.com/{repo_owner}/{repo_name}/main/{file_path}"
-        
-        return github_link
+        if response.status_code == 200:
+            data = response.json()
+            # Ambil link gambar langsung (.jpg)
+            direct_link = data['data']['link']
+            return direct_link
+        else:
+            st.error(f"Imgur Upload Error: {response.status_code}")
+            return "Gagal Upload Gambar"
     except Exception as e:
-        st.error(f"Gagal menyimpan foto analisis: {str(e)}")
-        return "Gagal Simpan Gambar"
+        st.error(f"Gagal memproses pengiriman gambar: {str(e)}")
+        return "Gagal Upload Gambar"
 
 def append_to_google_sheets(row_data):
     try:

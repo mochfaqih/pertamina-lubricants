@@ -135,30 +135,45 @@ def get_google_credentials():
     return Credentials.from_service_account_info(creds_dict, scopes=scopes)
 
 # Tambahkan 'folder_id' sebagai argumen ketiga di dalam kurung fungsi ini
-def upload_to_google_drive(image_pil, filename, folder_id=None):
+def upload_to_google_drive(image_pil, filename, folder_id):
     try:
-        # 1. Konversi gambar PIL ke byte biner memori
+        creds = get_google_credentials()
+        drive_service = build('drive', 'v3', credentials=creds)
+        
+        # Konversi gambar PIL ke biner memori
         img_byte_arr = io.BytesIO()
         image_pil.save(img_byte_arr, format='JPEG')
         img_byte_arr.seek(0)
         
-        # 2. Kirim ke API Imgur menggunakan Client-ID publik anonim
-        url = "https://api.imgur.com/3/image"
-        payload = {'image': img_byte_arr.getvalue()}
-        headers = {'Authorization': 'Client-ID 1df056635817290'} # Client-ID cadangan universal
+        file_metadata = {
+            'name': filename,
+            'parents': [folder_id]
+        }
+        media = MediaIoBaseUpload(img_byte_arr, mimetype='image/jpeg', resumable=True)
         
-        response = requests.post(url, headers=headers, data=payload)
+        # Buat file di Google Drive tujuan
+        file = drive_service.files().create(
+            body=file_metadata, 
+            media_body=media, 
+            fields='id, webViewLink',
+            supportsAllDrives=True
+        ).execute()
         
-        if response.status_code == 200:
-            data = response.json()
-            # Ambil link gambar langsung (.jpg)
-            direct_link = data['data']['link']
-            return direct_link
-        else:
-            st.error(f"Imgur Upload Error: {response.status_code}")
-            return "Gagal Upload Gambar"
+        file_id = file.get('id')
+        
+        # Berikan izin akses link agar siapapun yang memegang tautan di Sheets bisa melihat fotonya
+        try:
+            drive_service.permissions().create(
+                fileId=file_id, 
+                body={'type': 'anyone', 'role': 'reader'},
+                supportsAllDrives=True
+            ).execute()
+        except:
+            pass
+            
+        return file.get('webViewLink')
     except Exception as e:
-        st.error(f"Gagal memproses pengiriman gambar: {str(e)}")
+        st.error(f"Gagal upload foto analisis ke Google Drive: {str(e)}")
         return "Gagal Upload Gambar"
 
 def append_to_google_sheets(row_data):

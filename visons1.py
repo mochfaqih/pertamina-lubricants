@@ -146,7 +146,7 @@ def upload_to_google_drive(image_pil, filename, *args, **kwargs):
         
         # 2. Ambil kredensial GitHub dari Streamlit Secrets
         github_token = st.secrets["github"]["token"]
-        repo_owner = "Mfaqih8"  # Username GitHub kamu
+        repo_owner = "mochfaqih"  # Username GitHub kamu
         repo_name = "pertamina-lubricants"  # Nama repositori kamu
         path_di_repo = f"saved_images/{filename}"  # Folder tujuan di GitHub
         
